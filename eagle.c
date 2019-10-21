@@ -307,6 +307,7 @@ static inline void variant_print(char **output, const vector_t *var_set, int i, 
  * @return a set of likelihood
  * Using mutex here to do parallelism.
  * calling the function from calc.c, which is calc_prob().
+ * and calling function set_prob_matrix(in calc.c) with using parameter bisulfite.
 */
 static void calc_likelihood(stats_t *stat, vector_t *var_set, const char *refseq, const int refseq_length, read_t **read_data, const int nreads, int seti, int *seqnt_map) {
     size_t i, readi;
@@ -669,7 +670,7 @@ typedef struct {
     pthread_mutex_t q_lock;
     pthread_mutex_t r_lock;
     size_t len;
-} work_t;
+} work_t;//for storing data
 
 
 /// pooling
