@@ -70,6 +70,10 @@ KHASH_MAP_INIT_STR(rsh, fasta_t *)   // hashmap: string key, vector value
 static khash_t(rsh) *refseq_hash; // pointer to hashmap
 static pthread_mutex_t refseq_lock; 
 
+/// loading variant
+/** 
+ * return a set of variant
+*/
 static vector_t *vcf_read(FILE *file) {
     vector_t *var_list = vector_create(8, VARIANT_T);
 
@@ -104,6 +108,10 @@ static vector_t *vcf_read(FILE *file) {
     return var_list;
 }
 
+/// fetch the last position
+/** 
+ * return the last position for current variant.
+*/
 static int bam_fetch_last(const char *bam_file, const char *chr, const int pos1, const int pos2) {
     /* Reads in variant j = i + 1 region coordinates */
     samFile *sam_in = sam_open(bam_file, "r"); // open bam file
@@ -131,6 +139,11 @@ static int bam_fetch_last(const char *bam_file, const char *chr, const int pos1,
     return(last);
 }
 
+/// 
+/** 
+ * is called in evaluate
+ * might want to return a set of alignment
+*/
 static vector_t *bam_fetch(const char *bam_file, const char *chr, const int pos1, const int pos2) {
     /* Reads in region coordinates */
     vector_t *read_list = vector_create(64, READ_T);
@@ -159,6 +172,10 @@ static vector_t *bam_fetch(const char *bam_file, const char *chr, const int pos1
     return read_list;
 }
 
+/// 
+/** 
+ * is called in evaluate & calc_likelihood
+*/
 static fasta_t *refseq_fetch(char *name, const char *fa_file) {
     pthread_mutex_lock(&refseq_lock);
 	khiter_t k = kh_get(rsh, refseq_hash, name);
@@ -190,6 +207,10 @@ static fasta_t *refseq_fetch(char *name, const char *fa_file) {
     return f;
 }
 
+/// might be construct the alternative(pair) sequence.
+/** 
+ * is called in calc_likelihood
+*/
 static char *construct_altseq(const char *refseq, int refseq_length, const vector_int_t *combo, variant_t **var_data, int *altseq_length) {
     int i;
     int offset = 0;
@@ -281,6 +302,12 @@ static inline void variant_print(char **output, const vector_t *var_set, int i, 
     strcat(*output, "]\n");
 }
 
+/// calculate likelihood
+/** @param  var_set  Some possible snippet load in vatiant find.
+ * @return a set of likelihood
+ * Using mutex here to do parallelism.
+ * calling the function from calc.c, which is calc_prob().
+*/
 static void calc_likelihood(stats_t *stat, vector_t *var_set, const char *refseq, const int refseq_length, read_t **read_data, const int nreads, int seti, int *seqnt_map) {
     size_t i, readi;
     stat->ref = 0;
@@ -451,6 +478,10 @@ static void calc_likelihood(stats_t *stat, vector_t *var_set, const char *refseq
     }
 }
 
+/// do all work in this function under pool()
+/** 
+ * bam_fetch => calc_likelihood => variant_find, variant_print 
+*/
 static char *evaluate(vector_t *var_set) {
     size_t i, readi, seti;
 
@@ -640,6 +671,11 @@ typedef struct {
     size_t len;
 } work_t;
 
+
+/// pooling
+/** @
+ * calling evaluate(), calculate every possible set.
+*/
 static void *pool(void *work) {
     work_t *w = (work_t *)work;
 
@@ -664,6 +700,12 @@ static void *pool(void *work) {
     return NULL;
 }
 
+
+/// do all work in this function after vcf_read()
+/** 
+ * bam_fetch_last => pool
+ * find the last possible position then do the pooling.
+*/
 static void process(const vector_t *var_list, FILE *out_fh) {
     size_t i, j;
 
@@ -797,6 +839,10 @@ static void process(const vector_t *var_list, FILE *out_fh) {
     print_status("# Done:\t%s\t%s", bam_file, asctime(time_info));
 }
 
+/// print console
+/** 
+ * for debug 
+*/
 static void print_usage() {
     printf("\nUsage: eagle [options] -v variants.vcf -a alignment.bam -r reference.fasta\n\n");
     printf("Required:\n");
@@ -829,6 +875,35 @@ static void print_usage() {
     printf("     --version         Display version.\n");
 }
 
+///main frame 
+/** 
+```graphviz
+digraph {
+  compound=true
+  rankdir=RL
+
+  graph [ fontname="Source Sans Pro", fontsize=20 ];
+  node [ fontname="Source Sans Pro", fontsize=18];
+  edge [ fontname="Source Sans Pro", fontsize=12 ];
+
+
+  subgraph cluster1 {
+     concentrate=true
+    a [label="htslib"] [shape=plaintext]
+    c [label="calc.c"] [shape=plaintext]
+    d [label="util.c\n vector.c\n heap.c"] [shape=box]
+    
+    sync [label="eagle.c" shape=plaintext ]
+    sync -> a [dir="a"]
+    sync -> c [dir="c"]
+    sync -> d [dir="d"]
+    
+    label="file architecture"
+  }
+}
+```
+ * vcf_read => process
+*/
 int main(int argc, char **argv) {
     /* Command line parameters defaults */
     debug = 0;
